@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detail Film & Review</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+    <nav class="bg-slate-900 border-b border-slate-800 p-4">
+        <div class="max-w-5xl mx-auto flex items-center">
+            <a href="index.html" class="text-sm text-slate-400 hover:text-indigo-400 transition">← Kembali ke Beranda</a>
+        </div>
+    </nav>
+
+    <main class="max-w-5xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-8">
+        
+        <!-- Kolom Kiri: Info Film & Form Review -->
+        <div class="md:col-span-1 space-y-6">
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+                <span id="movie-genre" class="text-xs font-semibold bg-indigo-950 text-indigo-400 px-3 py-1 rounded-full">...</span>
+                <h2 id="movie-title" class="text-2xl font-bold mt-3">Memuat...</h2>
+                <p id="movie-year" class="text-sm text-slate-400 mt-1">...</p>
+            </div>
+
+            <!-- Form Tulis Review -->
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+                <h3 class="text-md font-bold mb-4 flex items-center gap-2">✍️ Tulis Ulasan Anda</h3>
+                <form id="review-form" class="space-y-4">
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Rating (1-5)</label>
+                        <input type="number" id="rating" min="1" max="5" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 focus:border-indigo-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs text-slate-400 mb-1">Isi Review</label>
+                        <textarea id="review_text" rows="4" required class="w-full bg-slate-800 border border-slate-700 rounded-lg p-2 focus:border-indigo-500 focus:outline-none" placeholder="Ceritakan pendapat Anda tentang film ini..."></textarea>
+                    </div>
+                    <button type="submit" id="submit-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 rounded-lg transition text-sm">
+                        Kirim Ulasan
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Kolom Kanan: Daftar Review & Komponen VSS Rekomendasi -->
+        <div class="md:col-span-2 space-y-6">
+            <!-- Tempat Ulasan Utama -->
+            <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl">
+                <h3 class="text-lg font-bold mb-4">Ulasan Penonton</h3>
+                <div id="reviews-list" class="space-y-4 divide-y divide-slate-800">
+                    <!-- List review di-inject disini -->
+                </div>
+            </div>
+
+            <!-- Widget VSS: Review Serupa -->
+            <div id="vss-widget" class="hidden bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-500/20 p-6 rounded-2xl">
+                <h4 class="text-sm font-bold text-indigo-400 tracking-wider uppercase mb-3 flex items-center gap-2">
+                    💡 Berdasarkan AI: Ulasan Serupa (Rekomendasi)
+                </h4>
+                <div id="similar-reviews" class="grid grid-cols-1 gap-3">
+                    <!-- Rekomendasi kemiripan makna teks dari pgvector dimasukkan disini -->
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const movieId = urlParams.get('id');
+        const BASE_URL = 'http://localhost:5000/api';
+
+        if (!movieId) window.location.href = 'index.html';
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchMovieDetails();
+            fetchReviews();
+        });
+
+        // Ambil Data Film Terpilih (Versi Optimal: Menembak rute spesifik ID)
+        async function fetchMovieDetails() {
+            try {
+                const res = await fetch(`${BASE_URL}/movies/${movieId}`);
+                if (!res.ok) throw new Error('Gagal mengambil data film');
+                
+                const currentMovie = await res.json();
+                
+                if (currentMovie) {
+                    document.getElementById('movie-title').innerText = currentMovie.title;
+                    document.getElementById('movie-genre').innerText = currentMovie.genre;
+                    document.getElementById('movie-year').innerText = `Tahun Rilis: ${currentMovie.release_year}`;
+                }
+            } catch (err) { 
+                console.error(err); 
+                document.getElementById('movie-title').innerText = "Gagal memuat detail film.";
+            }
+        }
+
+        // Ambil Daftar Review
+        async function fetchReviews() {
+            try {
+                const res = await fetch(`${BASE_URL}/movies/${movieId}/reviews`);
+
+                if (!res.ok) {
+                    throw new Error("Gagal mengambil review");
+                }
+
+                const reviews = await res.json();
+                const container = document.getElementById('reviews-list');
+                container.innerHTML = '';
+
+                if(reviews.length === 0) {
+                    container.innerHTML = '<p class="text-slate-500 text-sm py-4">Belum ada ulasan untuk film ini.</p>';
+                    return;
+                }
+
+                reviews.forEach(rev => {
+                    container.innerHTML += `
+                        <div class="pt-4 first:pt-0 group">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-amber-400 font-medium text-sm">⭐ ${rev.rating}/5</span>
+                                <button onclick="fetchSimilarReviews(${rev.id})" class="text-xs text-indigo-400 opacity-0 group-hover:opacity-100 bg-indigo-500/10 px-2 py-1 rounded hover:bg-indigo-500/20 transition cursor-pointer">
+                                    Cari yang mirip ✨
+                                </button>
+                            </div>
+                            <p class="text-slate-300 text-sm leading-relaxed">${rev.review_text}</p>
+                        </div>
+                    `;
+                });
+            } catch (err) { console.error(err); }
+        }
+
+        // Fungsi Spesial VSS: Memanggil endpoint kemiripan kosinus pgvector
+        async function fetchSimilarReviews(reviewId) {
+            const widget = document.getElementById('vss-widget');
+            const container = document.getElementById('similar-reviews');
+            container.innerHTML = '<p class="text-xs text-slate-500 animate-pulse">Menghitung kemiripan vektor AI...</p>';
+            widget.classList.remove('hidden');
+
+            try {
+                const res = await fetch(`${BASE_URL}/reviews/${reviewId}/similar`);
+
+                if (!res.ok) {
+                    throw new Error("Tidak bisa mengambil review serupa");
+                }
+                const similar = await res.json();
+                container.innerHTML = '';
+
+                if(similar.length === 0) {
+                    container.innerHTML = '<p class="text-xs text-slate-500">Tidak ditemukan ulasan yang bermakna mirip di film lain.</p>';
+                    return;
+                }
+
+                similar.forEach(item => {
+                    container.innerHTML += `
+                        <div class="bg-slate-900/80 border border-slate-800 p-3 rounded-xl">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs font-semibold text-slate-400">Film: ${item.title}</span>
+                                <span class="text-xs text-amber-400">⭐ ${item.rating}/5</span>
+                            </div>
+                            <p class="text-xs text-slate-300 italic">"${item.review_text}"</p>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                container.innerHTML = '<p class="text-xs text-red-400">Gagal mengambil review serupa.</p>';
+            }
+        }
+
+        // Submit Review Baru
+        document.getElementById('review-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const submitBtn = document.getElementById('submit-btn');
+            const review_text = document.getElementById('review_text').value;
+            const rating = document.getElementById('rating').value;
+
+            submitBtn.innerText = "Membuat Embedding AI...";
+            submitBtn.disabled = true;
+
+            try {
+                const res = await fetch(`${BASE_URL}/reviews`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ movie_id: parseInt(movieId), review_text, rating: parseInt(rating) })
+                });
+
+                if (res.ok) {
+                    document.getElementById('review-form').reset();
+                    fetchReviews();
+                } else {
+                    const errData = await res.json();
+                    alert('Gagal mengirim ulasan: ' + errData.error);
+                }
+            } catch (err) {
+                alert('Gagal mengirim ulasan');
+            } finally {
+                submitBtn.innerText = "Kirim Ulasan";
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
